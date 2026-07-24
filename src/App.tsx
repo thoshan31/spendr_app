@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { COLORS, FONT, RADIUS, SPACING } from './lib/constants';
 import { saveProfile, loadProfile, saveExpenses, loadExpenses, Expense } from './lib/storage';
-import { FAKE_EXPENSES } from './lib/sampleData';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import LoginScreen from './components/LoginScreen';
 import SignUpScreen from './components/SignUpScreen';
@@ -23,53 +22,57 @@ const TABS: { key: Tab; label: string; emoji: string }[] = [
 
 function AuthenticatedApp() {
   const { user } = useAuth();
+
   const [showWelcome, setShowWelcome] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory] = useState('all');
 
-  // Profile state
-  const [profile, setProfile] = useState({ name: '', budget: 15000 });
+  const [profile, setProfile] = useState({
+    name: '',
+    budget: 15000,
+  });
 
-  // Expenses state
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
-  // Load persisted data on mount
   useEffect(() => {
-    const savedProfile = loadProfile();
+    if (!user) return;
+
+    const savedProfile = loadProfile(user.uid);
+    const savedExpenses = loadExpenses(user.uid);
+
     setProfile(savedProfile);
-    const savedExpenses = loadExpenses();
-    setExpenses(savedExpenses.length > 0 ? savedExpenses : FAKE_EXPENSES);
+    setExpenses(savedExpenses);
+
     if (savedProfile.name) {
       setShowWelcome(false);
     }
-  }, []);
+  }, [user]);
 
-  // Persist expenses on change
   useEffect(() => {
-    if (expenses.length > 0) {
-      saveExpenses(expenses);
-    }
-  }, [expenses]);
+    if (!user) return;
+    saveExpenses(user.uid, expenses);
+  }, [expenses, user]);
 
   const handleProfileUpdate = (name: string, budget: number) => {
     setProfile({ name, budget });
+    if (user) {
+      saveProfile(user.uid, name, budget);
+    }
   };
 
   const handleAddExpense = (expense: Expense) => {
-    setExpenses([expense, ...expenses]);
+    setExpenses((prev) => [expense, ...prev]);
   };
 
   const handleDeleteExpense = (id: string) => {
-    setExpenses(expenses.filter((e) => e.id !== id));
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
-  // Welcome screen
   if (showWelcome) {
     return <WelcomeScreen onGetStarted={() => setShowWelcome(false)} />;
   }
 
-  // Expense detail view
   if (selectedExpense) {
     return (
       <ExpenseDetailScreen
@@ -80,7 +83,6 @@ function AuthenticatedApp() {
     );
   }
 
-  // Main app with tabs
   return (
     <div
       style={{
@@ -91,7 +93,6 @@ function AuthenticatedApp() {
         fontFamily: 'system-ui, -apple-system, sans-serif',
       }}
     >
-      {/* Main content */}
       <div style={{ flex: 1, paddingBottom: 72 }}>
         {activeTab === 'home' && (
           <HomeScreen
@@ -99,18 +100,21 @@ function AuthenticatedApp() {
             onSelectExpense={setSelectedExpense}
           />
         )}
+
         {activeTab === 'add' && (
           <AddScreen
             onAdd={handleAddExpense}
             onNavigateHome={() => setActiveTab('home')}
           />
         )}
+
         {activeTab === 'stats' && (
           <StatsScreen
             expenses={expenses}
             selectedCategory={selectedCategory}
           />
         )}
+
         {activeTab === 'profile' && (
           <ProfileScreen
             expenses={expenses}
@@ -120,7 +124,6 @@ function AuthenticatedApp() {
         )}
       </div>
 
-      {/* Bottom Tab Bar */}
       <div
         style={{
           position: 'fixed',
@@ -138,6 +141,7 @@ function AuthenticatedApp() {
       >
         {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
+
           return (
             <button
               key={tab.key}
@@ -204,7 +208,9 @@ function AppContent() {
       >
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 48, marginBottom: SPACING.lg }}>💸</div>
-          <div style={{ color: COLORS.textMuted, fontSize: FONT.md }}>Loading...</div>
+          <div style={{ color: COLORS.textMuted, fontSize: FONT.md }}>
+            Loading...
+          </div>
         </div>
       </div>
     );
